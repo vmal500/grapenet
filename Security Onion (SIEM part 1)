@@ -1,0 +1,152 @@
+# Security Onion (SIEM part 1)
+
+Because the whole SIEM area is quite big IMO to be written in one article, it will be separated into 2 parts:
+
+1. SIEM Installation - Deploying the Security Onion as a SIEM solution and additionally configuring pfSense for network traffic monitoring.
+2. Agents deployment - Deploying monitoring agents provided by Security Onion, such as Wazuh for example, that will collect logs and send them back to SIEM.
+
+
+## Initial Setup
+
+The first thing of course is to download the Security Onion ISO image file from the official download page and then we can start with installation.
+
+> **Note:** Before you start with the SIEM installation, add additional VLAN to your network. it will be used for port mirroring, but more about it, later in the article.
+
+### Minimum Specifications for the SIEM VM
+
+- 16GB RAM
+- 8 CPU
+- 200GB disk space 
+- 2 NICs:
+  - VLAN 30 (security)
+  - VLAN 99 for port mirroring
+
+## Installation Process
+
+Once you start VM and choose to install Security Onion (the first option) just follow along with everything default till the point where you will be asked for the username and password. Enter the desired credentials, but do note that those credentials will be for CLI access to the VM. For web access (or SOC Console access as they call it) you will create a user at a later point. You can follow the official Youtube guide for this first part.
+
+After installation and reboot of the VM, you will log in to the console with credentials from the previous step and an actual installation will begin. Continue with the installation steps, and the menu where you need to choose installation type, select STANDALONE.
+
+![Security Onion Installation Type](/Images/SO1.png)
+
+Accept the license and move to the part where you need to set the hostname. In my case that will be rcsiem but do note this is only the hostname, not FQDN as it is mentioned in the installation description. We will add FQDN later.
+
+![Security Onion Hostname](/Images/SO2.png)
+
+Then as a description of the node, type whatever you want.
+
+![Security Onion Node Description](/Images/SO3.png)
+
+### Network Configuration
+
+Now here comes the important part. We need to choose our management NIC. This is an interface that will communicate with other devices in the network, the interface which will have an IP address. The second interface is the one used for SPAN (port mirroring), to get the network traffic, and this interface will not have an IP address.
+
+In my case, my first interface is in VNET 30 and that's the interface I want to be a management interface. Be sure to compare MAC addresses of the one during the installation with the NIC in your VM settings.
+
+![Security Onion Management NIC](/Images/SO4.png)
+
+Then select STATIC option on how to set up the management interface and continue. You will be prompted to enter the IP address for your SIEM. In our case, it should be an IP address from VLAN 30 range.
+
+![Security Onion IP Configuration](/Images/SO5.png)
+
+Then enter the default gateway IP address and DNS server (pfSense VLAN 30 IP address in my case) and set the search domain to the one you are using from the beginning (in my case that is grapenet.mylab).
+Press OK and continue.
+
+![Security Onion Network Settings](/Images/SO6.png)
+
+Then continue with the default options (Standard manager installation, Direct internet connection) The next option is to choose how this manager will be installed. We will set Standard and continue.
+
+Security Onion will start checking some scripts, it will not take much time.
+Now we come to the part of selecting the Monitor interface which is the other one, we mentioned before.
+
+![Security Onion Monitor Interface](/Images/SO7.png)
+
+Then continue with the default settings until you get to the point to select Zeek or Suricata for metadata. Select Zeek and continue with default settings further.
+
+### User Configuration
+
+Now comes the part of creating a SOC Console user.
+
+![Security Onion SOC User](/Images/SO8.png)
+
+Now at the part where you are asked how you want to access the web interface, choose OTHER and then configure the desired FQDN. Optionally you can select an IP address too.
+
+My FQDN is sosiem.grapene.mylab
+
+![Security Onion FQDN Configuration](/Images/SO9.png)
+
+Then set a password for the soremote user which is used for adding sensors remotely.
+
+![Security Onion Remote User](/Images/SO10.png)
+
+Then continue with the default settings until the part where you are asked about the web interface access. Choose Yes.
+
+![Security Onion Web Interface](/Images/SO11.png)
+
+Enter your home network (usually 192.68.0.0/24 or 10.0.0.0/24) and continue.
+In the production environment, we would set of course a network of VLAN 30, or whatever the network we are accessing from. But in this case, I do not want to access it from the VM browser, it would be just too slow, so I will use my browser outside the VMWare.
+
+![Security Onion Network Access](/Images/SO12.png)
+
+Then you will see the final configuration that will be applied. Select Yes and the installation will begin. It will take some time, so grab a coffee or something. It will take around 30-40 minutes to set it up.
+
+![Security Onion Final Configuration](/Images/SO13.png)
+
+Once it is completed, you can then access it via the browser using the domain you've setup earlier.
+
+![Security Onion Web Access](/Images/SO14.png)
+
+> **Note:** Do not fear if it is not accessible right after installation. Sometimes Docker containers need a bit of time to boot up. Connect via SSH to the server and use the command `sudo so-status` to see if they all booted up.
+
+### DNS Configuration Note
+
+I had to manually add the DNS entry for the SIEM in the hosts file from windows I kept having DNS Probe finished NXDOMAIN error.
+
+To open and edit the hosts file on Windows, you need to use a text editor with administrator privileges. Here's how:
+
+1. Open Notepad as Administrator
+   - Press the Windows key, type "Notepad" in the search bar
+   - Right-click Notepad and select Run as administrator
+
+2. Open the Hosts File in Notepad
+   - In Notepad, go to File > Open
+   - Navigate to: `C:\Windows\System32\drivers\etc\`
+   - Change file type from Text Documents (.txt) to All Files
+   - Select the hosts file and click Open
+
+3. Add the Entry for Security Onion
+   - Add the following line (replace IP as needed):
+     ```
+     172.16.30.33 sosiem.grapenet.mylab
+     ```
+   - Save the file
+
+![Security Onion Hosts File](/Images/SO15.png)
+
+4. Test the Configuration
+   - Try accessing Security Onion using either the IP address or sosiem.grapenet.mylab in your browser
+
+## pfSense Port Mirroring
+
+While we will deploy agents that will collect logs from end devices, we still want also to collect network traffic. To do this, we need a port mirroring to be configured on a firewall. This feature/technology allows you to get all network traffic packets that one network interface receives, and copy it to another interface, without interfering with the network traffic.
+
+So this means that we will need an additional interface on our pfSense, which will actually collect all network traffic sent to it. This is why we created earlier a VLAN99. You need to add an additional interface in your VMWare configuration but to do that, your firewall VM must be turned off.
+
+Once you add it, boot the VM and log in to the web portal. Go to Interfaces > Assignments and assign the newly created interface. Once saved, open it and configure the name and nothing else. No IP address is needed here.
+
+![pfSense Interface Configuration](/Images/SO16.png)
+
+Now to create an actual span port, go to Interfaces > Assignments > Bridges and click on Add button to create a new bridge.
+In the Bridge Configuration select VLAN 20 and 30 interfaces as their traffic will be monitored, and in advanced options in Span Port select VLAN 99(SPAN_PORT) interface as that will be the interface that will receive the mirrored traffic.
+
+![pfSense Bridge Configuration](/Images/SO17.png)
+
+## Basic Testing
+
+Let's just perform a few quick tests, to test packet capturing. Start your Kali Linux machine and a web server (DVWA). Once started, use the following commands (with the corresponding IP addresses you've set of course):
+
+1. `ping 172.16.20.210` - Pinging the server should raise a low severity alert GPL ICMP_INFO PING *NIX
+2. `nmap -sC -sV -n -v 172.16.20.210` - Quick Nmap scan should raise a few alerts of various severities, such as ET SCAN Possible Nmap User-Agent Observed, ET SCAN Suspicious inbound to PostgreSQL port 5432
+3. `sqlmap -u "http:///172.16.20.210"` - Simple sqlmap scan that will probably fail but the scan attempt will still be detected
+
+![Security Onion Testing](/Images/SO18.png)

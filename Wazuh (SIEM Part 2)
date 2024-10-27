@@ -1,0 +1,133 @@
+# Wazuh HIDS Agent Deployment (SIEM Part 2)
+
+## Overview
+We will focus on deploying HIDS agents on our VMs in VLAN 20, the Corporate LAN network. Wazuh one of the free and open-source HIDS solutions available.
+
+## Firewall Configuration
+
+### Security Onion Configuration
+1. Login to SO CLI and use the `so-allow` command
+2. Select option `w` and add VLAN 20 network
+3. Select option `r` for Wazuh registration service
+
+![Security Onion Wazuh Allow](/Images/WZ1.png)
+### PfSense Configuration
+Create a firewall rule to allow:
+- TCP/UDP traffic
+- Port range: 1514-1515
+- Destination: SIEM IP address
+
+![pfSense Wazuh Firewall Rule](/Images/WZ2.png)
+
+## Deploying Wazuh Agents
+
+**Note:** Before installation, verify updates made to the [Domain Controller deployment](Domain%20Controller%20(Corporate%20LAN).md) regarding static routing needed for endpoint log shipment.
+
+### Host Registration
+1. Login to SO CLI
+2. Run `so-wazuh-agent-manage`
+3. Select option `A` to add new host:
+   - Enter hostname
+   - Enter IP address
+4. Select option `E` and agent ID to extract the key
+5. Save keys for later use (Base64 encoded keys will work for Windows)
+
+![Security Onion Wazuh Agent Management](/Images/WZ3.png)
+### Windows Installation
+
+#### Prerequisites
+1. Download [Sysmon from Security Onion documentation](https://docs.securityonion.net/en/2.4/sysmon.html)
+2. Download Sysmon config file from Neo23x0 GitHub profile
+3. Create shared folder accessible throughout VLAN20 (requires VMware tools)
+
+#### Sysmon Setup
+1. Login with admin user
+2. Unpack Sysmon.zip
+3. Run CMD as administrator
+4. Navigate to files directory
+5. Execute:
+```bash
+sysmon64.exe -accepteula -i sysmonconfig-export.xml
+```
+![Security Onion Sysmon Setup](/Images/WZ4.png)
+#### Wazuh Agent Setup
+1. Download and run Wazuh installation file from SIEM download page
+2. Configure with:
+   - SIEM management IP address
+   - Extracted host key
+3. Add Sysmon logs configuration:
+```xml
+<localfile>
+    <location>Microsoft-Windows-Sysmon/Operational</location>
+    <log_format>eventchannel</log_format>
+</localfile>
+```
+4. Save and restart agent service
+
+![Security Onion Wazuh Agent Setup](/Images/WZ5.png)
+
+### Linux Installation
+
+1. Download DEB file from SIEM download page
+2. Install using:
+```bash
+sudo dpkg -i wazuh-agent_3.13.1-1_amd64.deb
+```
+
+3. Configure client key:
+   - Locate `/var/ossec/etc/client.keys`
+   - Extract key from SO Wazuh manager
+   - Decode Base64 key using [CyberChef](https://gchq.github.io/CyberChef/) From Base64
+   - Format will be: `id hostname ip_address secret_key`
+   - Copy decoded output to client.keys file
+
+4. Configure system service:
+```bash
+systemctl daemon-reload
+systemctl enable wazuh-agent
+```
+
+5. Configure manager connection:
+   - Edit `/var/ossec/etc/ossec.conf`
+   - Update server section:
+```xml
+<server>
+    <address>192.168.1.10</address>  <!-- Replace with actual Wazuh manager IP -->
+</server>
+```
+
+6. Start and verify service:
+```bash
+systemctl start wazuh-agent
+systemctl status wazuh-agent
+```
+
+![Security Onion Wazuh Agent Status](/Images/WZ6.png)
+
+## Data Verification
+
+### Checking Logs
+1. Open Kibana page from main SO page
+2. Select Host page
+3. Verify:
+   - Wazuh module logs
+   - Sysmon module logs
+
+![Security Onion Wazuh Logs](/Images/WZ7.png)
+
+![Security Onion Sysmon Logs](/Images/WZ8.png)
+
+### Troubleshooting
+If logs are not visible:
+- Check Wazuh logs for issues
+- Verify VLAN 20 traffic is allowed on:
+  - pfSense firewall
+  - Security Onion (`so-allow` command)
+
+> **Note:** Also if you go to the Alerts page from the main SO page, you should see some interesting first alerts from Wazuh.
+
+![Security Onion Wazuh Alerts](/Images/WZ9.png)
+
+## Navigation
+
+[← Back to Security Onion (SIEM Part 1)](Security%20Onion%20(SIEM%20Part%201).md) | [Next: README →](README.md)

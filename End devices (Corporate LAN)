@@ -1,0 +1,49 @@
+# End devices (Corporate LAN)
+
+## Prerequisite
+
+Before we continue further, be sure that you’ve followed all the steps from the previous article on how to set up the domain controller (DC) as in this one we will set up VMs that will be joined to the domain on the domain controller. Also, be sure that both the firewall and DC are powered on.
+
+## Windows 10
+
+Let’s now configure the Windows 10 machine.
+
+### Windows Firewall
+
+First, we will enable ICMP. Go to Control Panel > System and Security > Windows Defender Firewall and then open the Advanced settings menu.
+
+![Windows Firewall Advanced Settings](/Images/ED1.png)
+
+Find the File and Printer Sharing (Echo Request - ICMPv4-In) rule and enable them both, for Private, Public, and Domain.
+
+![Enable ICMPv4-In Rule](/Images/ED2.png)
+
+### Computer Name
+
+Now let’s set up the Windows 10 machine. Again, go to Control Panel > System and Security > System and then click on the Change settings.
+
+Change the description and the computer name, save the configuration, and restart the VM.
+
+### Joining the Domain
+
+Again, open the window where we changed the name of the machine, change to be the member of a domain, and then add our domain name. Click on the OK button and enter Administrator credentials once prompted.
+
+![Joining the Domain](/Images/ED3.png)
+
+If everything is correct, you should get a message that your VM has successfully joined the domain. You will need to restart the VM one more time.
+
+### Testing Domain User
+
+Once restarted, in the bottom left corner click on the Other user and it should automatically change you to the login screen to your domain. Let’s try some other credentials from the previous article and a user account.
+
+![Testing Domain User](/Images/ED4.png)
+
+We can also test access to the shared folder. In File Explorer open the `\\GDC01\GrapeNetShared\` and try to access any file.
+
+![Access Shared Folder](/Images/ED5.png)
+
+I will then go ahead and do another PC for the sake of it
+
+## Navigation
+
+[← Back to Domain Controller (Windows Server)](Corporate%20LAN%20Domain%20Controller.md) | [Next: Web Server (DVWA) →](Web%20Server%20(DVWA).md)
